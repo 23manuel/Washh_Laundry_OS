@@ -203,7 +203,15 @@ def shop_workspace():
                 st.write("**Total Debt Ledger**")
                 debts_all = dfv[dfv['balance'] > 0].copy()
                 if not debts_all.empty:
-                    st.dataframe(debts_all[['cust_name', 'cust_phone', 'balance', 'status']], use_container_width=True, hide_index=True)
+                    for _, r in debts_all.iterrows():
+                        with st.container(border=True):
+                            dc1, dc2, dc3 = st.columns([2, 1, 1])
+                            dc1.write(f"**{r['cust_name']}** | {r['cust_phone']}")
+                            dc2.write(f"Owes: **N{r['balance']:,.0f}**")
+                            if dc3.button("Clear Debt", key=f"clear_debt_{r['id']}"):
+                                supabase.table("orders").update({"amount_paid": r['total_price']}).eq("id", r['id']).execute()
+                                st.success(f"Debt cleared for {r['cust_name']}! Revenue updated.")
+                                st.rerun()
                 else:
                     st.success("No outstanding debts. The book is clean.")
 
