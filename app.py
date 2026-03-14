@@ -11,7 +11,15 @@ import streamlit as st
 import pandas as pd
 from supabase import create_client, Client
 from datetime import datetime, date
-
+# The Invisibility Cloak: Hides Streamlit branding and menus
+hide_st_style = """
+            <style>
+            #MainMenu {visibility: hidden;}
+            footer {visibility: hidden;}
+            header {visibility: hidden;}
+            </style>
+            """
+st.markdown(hide_st_style, unsafe_allow_html=True)
 # SETUP & CONFIG
 st.set_page_config(page_title="Washh | Silent Partner", layout="wide", initial_sidebar_state="collapsed")
 
