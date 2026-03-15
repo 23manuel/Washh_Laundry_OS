@@ -147,10 +147,15 @@ def shop_workspace():
                                 if r['notes']: st.info(r['notes'])
 
                             if stage == "Ready":
-                                c_phone = str(r['cust_phone']).replace(" ", "").replace("+", "")
-                                bal_ready = r['total_price'] - r['amount_paid']
-                                msg = f"Hello {r['cust_name']}, clothes ready at {shop['shop_name']}! Balance: N{bal_ready}."
-                                st.link_button("WhatsApp Nudge", f"https://wa.me/{c_phone}?text={msg.replace(' ', '%20')}", use_container_width=True)
+    c_phone = str(r['cust_phone']).replace(" ", "").replace("+", "")
+    bal_ready = r['total_price'] - r['amount_paid']
+    
+    # Only mention balance if they actually owe money
+    bal_text = f" Your balance is N{bal_ready:,.0f}." if bal_ready > 0 else ""
+    
+    msg = f"Hello {r['cust_name']}, your clothes are ready and looking sharp at {shop['shop_name']}!{bal_text} You can pick them up anytime or let us know if you prefer delivery."
+    
+    st.link_button("WhatsApp Nudge", f"https://wa.me/{c_phone}?text={msg.replace(' ', '%20')}", use_container_width=True)
 
                             if st.button("Move", key=f"move_{r['id']}"):
                                 next_s = stages[i+1] if i < len(stages)-1 else "Delivered"
@@ -240,9 +245,12 @@ def shop_workspace():
                         top_5 = customer_stats.sort_values('total_spent', ascending=False).head(5)
                         for _, row in top_5.iterrows():
                             st.write(f"{row['cust_name']} (N {row['total_spent']:,.0f})")
-                            msg = f"Hello {row['cust_name']}, you are one of our top customers at {shop['shop_name']}! Show this message for a VIP discount on your next drop-off."
+                            
+                            # The Loyalty Nudge
+                            msg = f"Hello {row['cust_name']}, we were looking at our records at {shop['shop_name']} and we saw how much you have supported us. Because you are one of our special regulars, we have kept a 'Thank You' surprise for your next visit. Just show this message to the manager when you come in so they can give you what we kept for you. We really appreciate your business."
+                            
                             c_phone = str(row['cust_phone']).replace(" ", "").replace("+", "")
-                            st.link_button(f"Reward {row['cust_name']}", f"https://wa.me/{c_phone}?text={msg.replace(' ', '%20')}")
+                            st.link_button(f"Reward {row['cust_name']}", f"https://wa.me/{c_phone}?text={msg.replace(' ', '%20')}", use_container_width=True)
 
                 with g_col2:
                     with st.container(border=True):
@@ -254,23 +262,42 @@ def shop_workspace():
                             for _, row in at_risk.iterrows():
                                 days_absent = (now - row['last_visit']).days
                                 st.write(f"{row['cust_name']} (Away {days_absent} days)")
-                                msg = f"Hello {row['cust_name']}, we miss you at {shop['shop_name']}! Bring your clothes in this week for a special welcome-back offer."
+                                
+                                # The Recovery Nudge
+                                msg = f"Hello {row['cust_name']}, it has been a while since we saw you at {shop['shop_name']}. We truly miss having you around. To welcome you back, we have set aside a special gift for your next drop-off. It is only waiting for you for a short time, so try and stop by this week so it doesn't pass you by. Looking forward to seeing you again."
+                                
                                 c_phone = str(row['cust_phone']).replace(" ", "").replace("+", "")
-                                st.link_button(f"Win Back {row['cust_name']}", f"https://wa.me/{c_phone}?text={msg.replace(' ', '%20')}")
+                                st.link_button(f"Win Back {row['cust_name']}", f"https://wa.me/{c_phone}?text={msg.replace(' ', '%20')}", use_container_width=True)
                         else:
                             st.write("All customers have visited recently.")
-
+                            
                 st.divider()
 
                 with st.expander("Security Settings"):
-                    new_p = st.text_input("New Vault PIN", type="password", key="new_pin_field")
-                    if st.button("Update PIN"):
-                        if len(new_p) >= 4:
-                            supabase.table("shops").update({"owner_pin": new_p}).eq("id", shop_id).execute()
-                            st.session_state.shop_info["owner_pin"] = new_p
-                            st.success("Vault PIN updated.")
-                        else:
-                            st.error("PIN must be at least 4 digits.")
+    st.write("Manage your access codes.")
+    sec_col1, sec_col2 = st.columns(2)
+
+    with sec_col1:
+        st.markdown("**Owner Vault PIN**")
+        new_owner_p = st.text_input("New Vault PIN", type="password", key="new_owner_pin")
+        if st.button("Update Vault PIN"):
+            if len(new_owner_p) >= 4:
+                supabase.table("shops").update({"owner_pin": new_owner_p}).eq("id", shop_id).execute()
+                st.session_state.shop_info["owner_pin"] = new_owner_p
+                st.success("Vault PIN updated successfully.")
+            else:
+                st.error("PIN must be at least 4 digits.")
+
+    with sec_col2:
+        st.markdown("**Shop/Staff PIN**")
+        new_shop_p = st.text_input("New Shop PIN", type="password", key="new_pin")
+        if st.button("Update Shop PIN"):
+            if len(new_shop_p) >= 4:
+                supabase.table("staff").update({"pin": new_shop_p}).eq("id", shop_id).execute()
+                st.session_state.staff_info["pin"] = new_shop_p
+                st.success("Shop PIN updated successfully.")
+            else:
+                st.error("PIN must be at least 4 digits.")
             else:
                 st.info("No business data available yet.")
 
