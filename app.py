@@ -170,165 +170,156 @@ def shop_workspace():
                 else: st.error("Access Denied.")
         else:
             col_h, col_l = st.columns([0.8, 0.2])
-            col_h.subheader("Business Command Center")
+            col_h.subheader("The Strong Room")
             if col_l.button("Lock Vault", use_container_width=True):
                 st.session_state.vault_unlocked = False
                 st.rerun()
 
             res = supabase.table("orders").select("*").eq("shop_id", shop_id).execute()
-            if res.data:
-                dfv = pd.DataFrame(res.data)
-                dfv['total_price'] = pd.to_numeric(dfv['total_price']).fillna(0)
-                dfv['amount_paid'] = pd.to_numeric(dfv['amount_paid']).fillna(0)
-                dfv['balance'] = dfv['total_price'] - dfv['amount_paid']
+            
+            # --- EXPANDER 1: BUSINESS COMMAND CENTER (Open by default) ---
+            with st.expander("📊 Business Command Center", expanded=True):
+                if res.data:
+                    dfv = pd.DataFrame(res.data)
+                    dfv['total_price'] = pd.to_numeric(dfv['total_price']).fillna(0)
+                    dfv['amount_paid'] = pd.to_numeric(dfv['amount_paid']).fillna(0)
+                    dfv['balance'] = dfv['total_price'] - dfv['amount_paid']
 
-                if 'created_at' in dfv.columns:
-                    dfv['created_at'] = pd.to_datetime(dfv['created_at'])
-                else:
-                    dfv['created_at'] = pd.Timestamp.now()
+                    if 'created_at' in dfv.columns:
+                        dfv['created_at'] = pd.to_datetime(dfv['created_at'])
+                    else:
+                        dfv['created_at'] = pd.Timestamp.now()
 
-                st.write("**Revenue & Receivables**")
-                tabs = st.tabs(["Today", "This Week", "This Month", "All Time"])
+                    st.write("**Revenue & Receivables**")
+                    tabs = st.tabs(["Today", "This Week", "This Month", "All Time"])
 
-                now = pd.Timestamp.now(tz=dfv['created_at'].dt.tz if hasattr(dfv['created_at'].dt, 'tz') else None)
-                today_start = now.normalize()
-                week_start = today_start - pd.Timedelta(days=today_start.weekday())
-                month_start = today_start.replace(day=1)
+                    now = pd.Timestamp.now(tz=dfv['created_at'].dt.tz if hasattr(dfv['created_at'].dt, 'tz') else None)
+                    today_start = now.normalize()
+                    week_start = today_start - pd.Timedelta(days=today_start.weekday())
+                    month_start = today_start.replace(day=1)
 
-                def render_metrics(filtered_df):
-                    c1, c2, c3 = st.columns(3)
-                    c1.metric("Expected Value", f"N {filtered_df['total_price'].sum():,.0f}")
-                    c2.metric("Revenue Collected", f"N {filtered_df['amount_paid'].sum():,.0f}")
-                    c3.metric("Outstanding Debt", f"N {filtered_df['balance'].sum():,.0f}")
+                    def render_metrics(filtered_df):
+                        c1, c2, c3 = st.columns(3)
+                        c1.metric("Expected Value", f"N {filtered_df['total_price'].sum():,.0f}")
+                        c2.metric("Revenue Collected", f"N {filtered_df['amount_paid'].sum():,.0f}")
+                        c3.metric("Outstanding Debt", f"N {filtered_df['balance'].sum():,.0f}")
 
-                with tabs[0]: render_metrics(dfv[dfv['created_at'] >= today_start])
-                with tabs[1]: render_metrics(dfv[dfv['created_at'] >= week_start])
-                with tabs[2]: render_metrics(dfv[dfv['created_at'] >= month_start])
-                with tabs[3]: render_metrics(dfv)
+                    with tabs[0]: render_metrics(dfv[dfv['created_at'] >= today_start])
+                    with tabs[1]: render_metrics(dfv[dfv['created_at'] >= week_start])
+                    with tabs[2]: render_metrics(dfv[dfv['created_at'] >= month_start])
+                    with tabs[3]: render_metrics(dfv)
 
-                st.divider()
+                    st.divider()
 
-                st.write("**Total Debt Ledger**")
-                debts_all = dfv[dfv['balance'] > 0].copy()
-                if not debts_all.empty:
-                    for _, r in debts_all.iterrows():
+                    st.write("**Total Debt Ledger**")
+                    debts_all = dfv[dfv['balance'] > 0].copy()
+                    if not debts_all.empty:
+                        for _, r in debts_all.iterrows():
+                            with st.container(border=True):
+                                dc1, dc2, dc3 = st.columns([2, 1, 1])
+                                dc1.write(f"**{r['cust_name']}** | {r['cust_phone']}")
+                                dc2.write(f"Owes: **N{r['balance']:,.0f}**")
+                                if dc3.button("Clear Debt", key=f"clear_debt_{r['id']}"):
+                                    supabase.table("orders").update({"amount_paid": r['total_price']}).eq("id", r['id']).execute()
+                                    st.success(f"Debt cleared for {r['cust_name']}! Revenue updated.")
+                                    st.rerun()
+                    else:
+                        st.success("No outstanding debts. The book is clean.")
+
+                    st.divider()
+
+                    st.write("**Customer Growth Engine**")
+                    g_col1, g_col2 = st.columns(2)
+
+                    customer_stats = dfv.groupby(['cust_name', 'cust_phone']).agg(
+                        total_spent=('total_price', 'sum'),
+                        last_visit=('created_at', 'max')
+                    ).reset_index()
+
+                    with g_col1:
                         with st.container(border=True):
-                            dc1, dc2, dc3 = st.columns([2, 1, 1])
-                            dc1.write(f"**{r['cust_name']}** | {r['cust_phone']}")
-                            dc2.write(f"Owes: **N{r['balance']:,.0f}**")
-                            if dc3.button("Clear Debt", key=f"clear_debt_{r['id']}"):
-                                supabase.table("orders").update({"amount_paid": r['total_price']}).eq("id", r['id']).execute()
-                                st.success(f"Debt cleared for {r['cust_name']}! Revenue updated.")
-                                st.rerun()
-                else:
-                    st.success("No outstanding debts. The book is clean.")
-
-                st.divider()
-
-                st.write("**Customer Growth Engine**")
-                g_col1, g_col2 = st.columns(2)
-
-                customer_stats = dfv.groupby(['cust_name', 'cust_phone']).agg(
-                    total_spent=('total_price', 'sum'),
-                    last_visit=('created_at', 'max')
-                ).reset_index()
-
-                with g_col1:
-                    with st.container(border=True):
-                        st.markdown("**Loyalty Board (Top Spenders)**")
-                        top_5 = customer_stats.sort_values('total_spent', ascending=False).head(5)
-                        for _, row in top_5.iterrows():
-                            st.write(f"{row['cust_name']} (N {row['total_spent']:,.0f})")
-                            
-                            # The Loyalty Nudge
-                            msg = f"Hello {row['cust_name']}, we were looking at our records at {shop['shop_name']} and we saw how much you have supported us. Because you are one of our special regulars, we have kept a 'Thank You' surprise for your next visit. Just show this message to the manager when you come in so they can give you what we kept for you. We really appreciate your business."
-                            
-                            c_phone = str(row['cust_phone']).replace(" ", "").replace("+", "")
-                            st.link_button(f"Reward {row['cust_name']}", f"https://wa.me/{c_phone}?text={msg.replace(' ', '%20')}", use_container_width=True)
-
-                with g_col2:
-                    with st.container(border=True):
-                        st.markdown("**Churn Risk (Absent > 21 Days)**")
-                        twenty_one_days_ago = now - pd.Timedelta(days=21)
-                        at_risk = customer_stats[customer_stats['last_visit'] < twenty_one_days_ago].sort_values('last_visit').head(5)
-
-                        if not at_risk.empty:
-                            for _, row in at_risk.iterrows():
-                                days_absent = (now - row['last_visit']).days
-                                st.write(f"{row['cust_name']} (Away {days_absent} days)")
-                                
-                                # The Recovery Nudge
-                                msg = f"Hello {row['cust_name']}, it has been a while since we saw you at {shop['shop_name']}. We truly miss having you around. To welcome you back, we have set aside a special gift for your next drop-off. It is only waiting for you for a short time, so try and stop by this week so it doesn't pass you by. Looking forward to seeing you again."
-                                
+                            st.markdown("**Loyalty Board (Top Spenders)**")
+                            top_5 = customer_stats.sort_values('total_spent', ascending=False).head(5)
+                            for _, row in top_5.iterrows():
+                                st.write(f"{row['cust_name']} (N {row['total_spent']:,.0f})")
+                                msg = f"Hello {row['cust_name']}, we were looking at our records at {shop['shop_name']} and we saw how much you have supported us. Because you are one of our special regulars, we have kept a 'Thank You' surprise for your next visit. Just show this message to the manager when you come in so they can give you what we kept for you. We really appreciate your business."
                                 c_phone = str(row['cust_phone']).replace(" ", "").replace("+", "")
-                                st.link_button(f"Win Back {row['cust_name']}", f"https://wa.me/{c_phone}?text={msg.replace(' ', '%20')}", use_container_width=True)
-                        else:
-                            st.write("All customers have visited recently.")
-                            
-                st.divider()
+                                st.link_button(f"Reward {row['cust_name']}", f"https://wa.me/{c_phone}?text={msg.replace(' ', '%20')}", use_container_width=True)
 
-            else:
-                st.info("No business data available yet.")
-                
-            # --- THE NEW SHOP COMMAND CENTER ---
-            st.subheader("⚙️ Shop Command Center")
-            st.write("Manage your shop identity and security access.")
+                    with g_col2:
+                        with st.container(border=True):
+                            st.markdown("**Churn Risk (Absent > 21 Days)**")
+                            twenty_one_days_ago = now - pd.Timedelta(days=21)
+                            at_risk = customer_stats[customer_stats['last_visit'] < twenty_one_days_ago].sort_values('last_visit').head(5)
 
-            prof_tab, sec_tab = st.tabs(["Edit Profile", "Security Settings"])
+                            if not at_risk.empty:
+                                for _, row in at_risk.iterrows():
+                                    days_absent = (now - row['last_visit']).days
+                                    st.write(f"{row['cust_name']} (Away {days_absent} days)")
+                                    msg = f"Hello {row['cust_name']}, it has been a while since we saw you at {shop['shop_name']}. We truly miss having you around. To welcome you back, we have set aside a special gift for your next drop-off. It is only waiting for you for a short time, so try and stop by this week so it doesn't pass you by. Looking forward to seeing you again."
+                                    c_phone = str(row['cust_phone']).replace(" ", "").replace("+", "")
+                                    st.link_button(f"Win Back {row['cust_name']}", f"https://wa.me/{c_phone}?text={msg.replace(' ', '%20')}", use_container_width=True)
+                            else:
+                                st.write("All customers have visited recently.")
+                else:
+                    st.info("No business data available yet.")
 
-            with prof_tab:
-                with st.form("edit_profile_form"):
-                    st.markdown("**Update Shop Details**")
-                    new_name = st.text_input("Shop Name", value=st.session_state.shop_info.get("shop_name", ""))
-                    new_phone = st.text_input("Owner Phone", value=st.session_state.shop_info.get("owner_phone", ""))
-                    new_code = st.text_input("Shop Code (e.g., SIMON01)", value=st.session_state.shop_info.get("shop_code", ""))
-                    
-                    submit_profile = st.form_submit_button("Save Changes")
-                    
-                    if submit_profile:
-                        if not re.match(r"^[A-Z]+[0-9]+$", new_code):
-                            st.error("Boss, Shop Code must be CAPITAL LETTERS followed by numbers (e.g., WASHH01). No spaces.")
-                        else:
-                            try:
-                                supabase.table("shops").update({
-                                    "shop_name": new_name,
-                                    "owner_phone": new_phone,
-                                    "shop_code": new_code
-                                }).eq("id", shop_id).execute()
-                                
-                                st.session_state.shop_info["shop_name"] = new_name
-                                st.session_state.shop_info["owner_phone"] = new_phone
-                                st.session_state.shop_info["shop_code"] = new_code
-                                
-                                st.success("Profile updated successfully. Your shop is locked in.")
-                            except Exception as e:
-                                st.error(f"Network error, try again: {e}")
+            # --- EXPANDER 2: SHOP COMMAND CENTER (Closed by default) ---
+            with st.expander("⚙️ Shop Command Center", expanded=False):
+                prof_tab, sec_tab = st.tabs(["Edit Profile", "Security Settings"])
 
-            with sec_tab:
-                st.markdown("**Manage Access PINs**")
-                sec_col1, sec_col2 = st.columns(2)
+                with prof_tab:
+                    with st.form("edit_profile_form"):
+                        st.markdown("**Update Shop Details**")
+                        new_name = st.text_input("Shop Name", value=st.session_state.shop_info.get("shop_name", ""))
+                        new_phone = st.text_input("Owner Phone", value=st.session_state.shop_info.get("owner_phone", ""))
+                        new_code = st.text_input("Shop Code (e.g., SIMON01)", value=st.session_state.shop_info.get("shop_code", ""))
+                        
+                        submit_profile = st.form_submit_button("Save Changes")
+                        
+                        if submit_profile:
+                            if not re.match(r"^[A-Z]+[0-9]+$", new_code):
+                                st.error("Boss, Shop Code must be CAPITAL LETTERS followed by numbers (e.g., WASHH01). No spaces.")
+                            else:
+                                try:
+                                    supabase.table("shops").update({
+                                        "shop_name": new_name,
+                                        "owner_phone": new_phone,
+                                        "shop_code": new_code
+                                    }).eq("id", shop_id).execute()
+                                    
+                                    st.session_state.shop_info["shop_name"] = new_name
+                                    st.session_state.shop_info["owner_phone"] = new_phone
+                                    st.session_state.shop_info["shop_code"] = new_code
+                                    
+                                    st.success("Profile updated successfully. Your shop is locked in.")
+                                except Exception as e:
+                                    st.error(f"Network error, try again: {e}")
 
-                with sec_col1:
-                    st.markdown("**Owner Vault PIN**")
-                    new_owner_p = st.text_input("New Vault PIN", type="password", key="new_owner_pin")
-                    if st.button("Update Vault PIN"):
-                        if len(new_owner_p) >= 4:
-                            supabase.table("shops").update({"owner_pin": new_owner_p}).eq("id", shop_id).execute()
-                            st.session_state.shop_info["owner_pin"] = new_owner_p
-                            st.success("Vault PIN secured.")
-                        else:
-                            st.error("PIN must be at least 4 digits.")
+                with sec_tab:
+                    st.markdown("**Manage Access PINs**")
+                    sec_col1, sec_col2 = st.columns(2)
 
-                with sec_col2:
-                    st.markdown("**Shop/Staff PIN**")
-                    new_shop_p = st.text_input("New Shop PIN", type="password", key="new_shop_pin")
-                    if st.button("Update Shop PIN"):
-                        if len(new_shop_p) >= 4:
-                            # Note: Adjusted to update 'staff' table based on your original logic
-                            supabase.table("staff").update({"pin": new_shop_p}).eq("shop_id", shop_id).execute()
-                            st.success("Staff PIN secured.")
-                        else:
-                            st.error("PIN must be at least 4 digits.")
+                    with sec_col1:
+                        st.markdown("**Owner Vault PIN**")
+                        new_owner_p = st.text_input("New Vault PIN", type="password", key="new_owner_pin")
+                        if st.button("Update Vault PIN"):
+                            if len(new_owner_p) >= 4:
+                                supabase.table("shops").update({"owner_pin": new_owner_p}).eq("id", shop_id).execute()
+                                st.session_state.shop_info["owner_pin"] = new_owner_p
+                                st.success("Vault PIN secured.")
+                            else:
+                                st.error("PIN must be at least 4 digits.")
+
+                    with sec_col2:
+                        st.markdown("**Shop/Staff PIN**")
+                        new_shop_p = st.text_input("New Shop PIN", type="password", key="new_shop_pin")
+                        if st.button("Update Shop PIN"):
+                            if len(new_shop_p) >= 4:
+                                supabase.table("staff").update({"pin": new_shop_p}).eq("shop_id", shop_id).execute()
+                                st.success("Staff PIN secured.")
+                            else:
+                                st.error("PIN must be at least 4 digits.")
 
 # APP ROUTER
 if not st.session_state.auth:
