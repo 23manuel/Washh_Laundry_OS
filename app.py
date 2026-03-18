@@ -45,25 +45,27 @@ def login_gate():
     
     tab_login, tab_signup = st.tabs(["🚪 Shop Login", "🚀 Start 7-Day Free Trial"])
 
-    # --- SPRINT 4: STANDARD LOGIN & AUTO-LOCK PAYWALL ---
+    # --- SPRINT 6: SHOP NAME LOGIN & AUTO-LOCK PAYWALL ---
     with tab_login:
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
             with st.container(border=True):
-                shop_code = st.text_input("Shop Code", key="gate_shop_code").strip()
+                # Swapped Shop Code for Shop Name
+                shop_input_name = st.text_input("Laundry Shop Name", key="gate_shop_name", placeholder="e.g. Clean & Sharp").strip()
                 pin = st.text_input("Staff PIN", type="password", key="gate_staff_pin")
 
                 if st.button("Enter Workspace", use_container_width=True):
-                    # Master Backdoor
-                    if shop_code == st.secrets["auth"]["master_code"] and pin == st.secrets["auth"]["master_pin"]:
+                    # Master Backdoor (Uses the name field to enter secret code)
+                    if shop_input_name == st.secrets["auth"]["master_code"] and pin == st.secrets["auth"]["master_pin"]:
                         st.session_state.auth = True
                         st.session_state.is_master = True
                         st.rerun()
 
-                    # Tenant Verification
-                    res = supabase.table("shops").select("*").eq("shop_code", shop_code).execute()
+                    # Tenant Verification via Shop Name (ilike handles case-insensitivity)
+                    res = supabase.table("shops").select("*").ilike("shop_name", shop_input_name).execute()
+                    
                     if res.data:
-                        shop = res.data[0]
+                        shop = res.data[0] # Grabs the exact match
                         expiry = datetime.strptime(shop["expiry_date"], "%Y-%m-%d").date()
                         
                         is_expired = date.today() > expiry
@@ -71,14 +73,14 @@ def login_gate():
 
                         # Check if trial has ended or account is manually disabled
                         if is_expired or is_disabled:
-                            # Auto-lock the database if they expired but it still says 'True' (Bug fix)
+                            # Auto-lock the database if they expired but it still says 'True'
                             if is_expired and shop.get("is_active", True):
                                 supabase.table("shops").update({"is_active": False}).eq("id", shop["id"]).execute()
                             
-                            st.error("🚨 Your 7-Day Free Trial has ended or your account is suspended.")
+                            st.error("🚨 Your Washh access has expired or is suspended.")
                             
-                            # The Contact Admin Button (ONLY appears when locked)
-                            msg = f"Hello Washh Admin, my shop '{shop['shop_name']}' (Code: {shop['shop_code']}) has expired. I am ready to subscribe and unlock my account!"
+                            # The Contact Admin Button
+                            msg = f"Hello Washh Admin, my shop '{shop['shop_name']}' has expired. I am ready to subscribe and unlock my account!"
                             safe_msg = urllib.parse.quote(msg)
                             wa_link = f"https://wa.me/{ADMIN_WA_NUMBER}?text={safe_msg}"
                             
@@ -93,7 +95,7 @@ def login_gate():
                             else:
                                 st.error("Invalid Staff PIN.")
                     else:
-                        st.error("Shop Code not found.")
+                        st.error("Shop Name not found. Check your spelling.")
 
     # --- SPRINT 3: AUTOPILOT ONBOARDING ---
     with tab_signup:
@@ -132,10 +134,10 @@ def login_gate():
                                     if phone_check.data:
                                         st.error("This phone number is already registered to another shop.")
                                     else:
-                                        # 4. Generate Unique Shop Code & Dates
+                                        # 4. Generate Unique Shop Code & Dates (Code stays invisible to user)
                                         random_str = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
                                         auto_code = f"WASHH-{random_str}"
-                                        trial_expiry = str(date.today() + timedelta(days=7)) # Bug fixed: use timedelta
+                                        trial_expiry = str(date.today() + timedelta(days=7))
                                         
                                         # 5. Create the Shop Profile (ACTIVE)
                                         new_shop = supabase.table("shops").insert({
@@ -157,7 +159,7 @@ def login_gate():
                                         }).execute()
 
                                         # 7. Log them in automatically!
-                                        st.success(f"Shop created! Your Shop Code is: {auto_code}. Save this somewhere safe.")
+                                        st.success(f"Shop created! You will use your Shop Name ('{new_shop_name}') and PIN to log in.")
                                         st.session_state.auth = True
                                         st.session_state.shop_info = shop_record
                                         st.rerun()
@@ -389,37 +391,32 @@ def shop_workspace():
                 else:
                     st.info("No business data available yet.")
 
-            # --- EXPANDER 2: SHOP COMMAND CENTER ---
+            # --- SPRINT 7: SHOP COMMAND CENTER (PROFILE CLEANUP) ---
             with st.expander("⚙️ Shop Command Center", expanded=False):
                 prof_tab, sec_tab = st.tabs(["Edit Profile", "Security Settings"])
 
                 with prof_tab:
                     with st.form("edit_profile_form"):
                         st.markdown("**Update Shop Details**")
+                        # Shop Code removed entirely from user view/edit
                         new_name = st.text_input("Shop Name", value=st.session_state.shop_info.get("shop_name", ""))
                         new_phone = st.text_input("Owner Phone", value=st.session_state.shop_info.get("owner_phone", ""))
-                        new_code = st.text_input("Shop Code (e.g., SIMON01)", value=st.session_state.shop_info.get("shop_code", ""))
                         
                         submit_profile = st.form_submit_button("Save Changes")
                         
                         if submit_profile:
-                            if not re.match(r"^[A-Z]+[0-9]+$", new_code):
-                                st.error("Boss, Shop Code must be CAPITAL LETTERS followed by numbers (e.g., WASHH01). No spaces.")
-                            else:
-                                try:
-                                    supabase.table("shops").update({
-                                        "shop_name": new_name,
-                                        "owner_phone": new_phone,
-                                        "shop_code": new_code
-                                    }).eq("id", shop_id).execute()
-                                    
-                                    st.session_state.shop_info["shop_name"] = new_name
-                                    st.session_state.shop_info["owner_phone"] = new_phone
-                                    st.session_state.shop_info["shop_code"] = new_code
-                                    
-                                    st.success("Profile updated successfully. Your shop is locked in.")
-                                except Exception as e:
-                                    st.error(f"Network error, try again: {e}")
+                            try:
+                                supabase.table("shops").update({
+                                    "shop_name": new_name,
+                                    "owner_phone": new_phone
+                                }).eq("id", shop_id).execute()
+                                
+                                st.session_state.shop_info["shop_name"] = new_name
+                                st.session_state.shop_info["owner_phone"] = new_phone
+                                
+                                st.success("Profile updated. If you changed your Shop Name, use the new one to log in next time.")
+                            except Exception as e:
+                                st.error(f"Network error, try again: {e}")
 
                 # --- SPRINT 5: SECURITY TAB REDESIGN ---
                 with sec_tab:
@@ -474,28 +471,74 @@ elif st.session_state.is_master:
     st.title("Washh Master Control")
     menu = st.sidebar.radio("Command", ["Network Health", "Onboarding", "Access Management"])
 
+    # --- SPRINT 8: SUBSCRIPTION RADAR (Master Control untouched except for this tab) ---
     if menu == "Network Health":
-        st.subheader("Global Operations")
+        st.subheader("Global Operations & Subscriptions")
         res = supabase.table("shops").select("*").execute()
+        
         if res.data:
             df_shops = pd.DataFrame(res.data)
+            
+            # Calculate days left
+            df_shops['expiry_date'] = pd.to_datetime(df_shops['expiry_date']).dt.date
+            today = date.today()
+            df_shops['days_left'] = (df_shops['expiry_date'] - today).dt.days
+            
+            # Sort so the ones expiring soonest (or expired) are at the top
+            df_shops = df_shops.sort_values('days_left')
+
             st.metric("Active Partners", len(df_shops[df_shops['is_active'] == True]))
-            st.dataframe(df_shops[['shop_name', 'shop_code', 'is_active', 'expiry_date']], use_container_width=True, hide_index=True)
+            
+            st.divider()
+            st.markdown("### 📡 Subscription Radar")
+            st.caption("Track who is expiring and nudge them to pay.")
+
+            for _, s in df_shops.iterrows():
+                with st.container(border=True):
+                    c1, c2, c3 = st.columns([2, 1, 1.5])
+                    
+                    status_emoji = "🟢" if s['is_active'] else "🔴"
+                    c1.write(f"**{status_emoji} {s['shop_name']}**")
+                    c1.caption(f"Phone: {s['owner_phone']}")
+                    
+                    d_left = s['days_left']
+                    if d_left > 3:
+                        c2.success(f"{d_left} Days Left")
+                        msg = f"Boss! Hope the Washh system is keeping '{s['shop_name']}' running smoothly. Just a heads up, your subscription renews in {d_left} days! 🚀"
+                    elif d_left > 0:
+                        c2.warning(f"{d_left} Days Left")
+                        msg = f"Boss! Your Washh system for '{s['shop_name']}' expires in {d_left} days. Let's get that ₦20k renewal sorted so your shop floor doesn't experience downtime! ⏰"
+                    elif d_left == 0:
+                        c2.error("Expires TODAY")
+                        msg = f"Boss! Your Washh access for '{s['shop_name']}' expires TODAY. Send the ₦20k renewal now so the system doesn't lock your front desk out at midnight! 🚨"
+                    else:
+                        c2.error(f"Expired {-d_left} days ago")
+                        msg = f"Boss! Your Washh system for '{s['shop_name']}' is currently locked. Let's get your renewal sorted so your staff can start logging orders again! 🔓"
+
+                    # Naija-proof the admin out-bound message
+                    raw_phone = str(s['owner_phone']).strip().replace(" ", "").replace("+", "").replace("-", "")
+                    if raw_phone.startswith("0"): c_phone = "234" + raw_phone[1:]
+                    else: c_phone = raw_phone
+                    
+                    safe_msg = urllib.parse.quote(msg)
+                    wa_link = f"https://wa.me/{c_phone}?text={safe_msg}"
+                    
+                    c3.link_button("Send WhatsApp Nudge 📲", wa_link, use_container_width=True)
 
             st.divider()
-            st.write("**Quick Actions: Status & Renewal**")
+            st.write("**Quick Actions: Status & Renewal Override**")
             with st.form("renewal_form", clear_on_submit=True):
                 col1, col2, col3 = st.columns(3)
-                t_code = col1.text_input("Shop Code")
+                
+                shop_list = df_shops['shop_name'].tolist()
+                t_name = col1.selectbox("Select Shop to Update", shop_list)
                 t_status = col2.selectbox("Set Active", [True, False])
                 t_expiry = col3.date_input("New Expiry Date")
+                
                 if st.form_submit_button("Update Partner"):
-                    if t_code:
-                        supabase.table("shops").update({"is_active": t_status, "expiry_date": str(t_expiry)}).eq("shop_code", t_code).execute()
-                        st.success(f"Shop {t_code} updated!")
-                        st.rerun()
-                    else:
-                        st.error("Enter Shop Code.")
+                    supabase.table("shops").update({"is_active": t_status, "expiry_date": str(t_expiry)}).eq("shop_name", t_name).execute()
+                    st.success(f"Shop '{t_name}' updated successfully!")
+                    st.rerun()
 
     elif menu == "Onboarding":
         st.subheader("New Partner Onboarding")
