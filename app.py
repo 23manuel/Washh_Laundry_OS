@@ -2,6 +2,7 @@
 import streamlit as st
 import pandas as pd
 import re
+import urllib.parse
 from supabase import create_client, Client
 from datetime import datetime, date
 
@@ -141,15 +142,23 @@ def shop_workspace():
                                 if r['notes']: st.info(r['notes'])
 
                             if stage == "Ready":
-                                c_phone = str(r['cust_phone']).replace(" ", "").replace("+", "")
+                                # 1. Naija-proof the phone number
+                                raw_phone = str(r['cust_phone']).strip().replace(" ", "").replace("+", "").replace("-", "")
+                                if raw_phone.startswith("0"):
+                                    c_phone = "234" + raw_phone[1:] # Changes 080... to 23480...
+                                else:
+                                    c_phone = raw_phone
+
                                 bal_ready = r['total_price'] - r['amount_paid']
-                                
-                                # Only mention balance if they actually owe money
                                 bal_text = f" Your balance is N{bal_ready:,.0f}." if bal_ready > 0 else ""
                                 
                                 msg = f"Hello {r['cust_name']}, your clothes are ready and looking sharp at {shop['shop_name']}!{bal_text} You can pick them up anytime or let us know if you prefer delivery."
                                 
-                                st.link_button("WhatsApp Nudge", f"https://wa.me/{c_phone}?text={msg.replace(' ', '%20')}", use_container_width=True)
+                                # 2. Properly encode the text so it doesn't break the browser
+                                safe_msg = urllib.parse.quote(msg)
+                                wa_link = f"https://wa.me/{c_phone}?text={safe_msg}"
+                                
+                                st.link_button("WhatsApp Nudge", wa_link, use_container_width=True)
 
                             if st.button("Move", key=f"move_{r['id']}"):
                                 next_s = stages[i+1] if i < len(stages)-1 else "Delivered"
@@ -243,8 +252,19 @@ def shop_workspace():
                             for _, row in top_5.iterrows():
                                 st.write(f"{row['cust_name']} (N {row['total_spent']:,.0f})")
                                 msg = f"Hello {row['cust_name']}, we were looking at our records at {shop['shop_name']} and we saw how much you have supported us. Because you are one of our special regulars, we have kept a 'Thank You' surprise for your next visit. Just show this message to the manager when you come in so they can give you what we kept for you. We really appreciate your business."
-                                c_phone = str(row['cust_phone']).replace(" ", "").replace("+", "")
-                                st.link_button(f"Reward {row['cust_name']}", f"https://wa.me/{c_phone}?text={msg.replace(' ', '%20')}", use_container_width=True)
+                                
+                                # Naija-proof the number
+                                raw_phone = str(row['cust_phone']).strip().replace(" ", "").replace("+", "").replace("-", "")
+                                if raw_phone.startswith("0"):
+                                    c_phone = "234" + raw_phone[1:]
+                                else:
+                                    c_phone = raw_phone
+                                
+                                # Encode the message properly
+                                safe_msg = urllib.parse.quote(msg)
+                                wa_link = f"https://wa.me/{c_phone}?text={safe_msg}"
+                                
+                                st.link_button(f"Reward {row['cust_name']}", wa_link, use_container_width=True)
 
                     with g_col2:
                         with st.container(border=True):
@@ -257,8 +277,19 @@ def shop_workspace():
                                     days_absent = (now - row['last_visit']).days
                                     st.write(f"{row['cust_name']} (Away {days_absent} days)")
                                     msg = f"Hello {row['cust_name']}, it has been a while since we saw you at {shop['shop_name']}. We truly miss having you around. To welcome you back, we have set aside a special gift for your next drop-off. It is only waiting for you for a short time, so try and stop by this week so it doesn't pass you by. Looking forward to seeing you again."
-                                    c_phone = str(row['cust_phone']).replace(" ", "").replace("+", "")
-                                    st.link_button(f"Win Back {row['cust_name']}", f"https://wa.me/{c_phone}?text={msg.replace(' ', '%20')}", use_container_width=True)
+                                    
+                                    # Naija-proof the number
+                                    raw_phone = str(row['cust_phone']).strip().replace(" ", "").replace("+", "").replace("-", "")
+                                    if raw_phone.startswith("0"):
+                                        c_phone = "234" + raw_phone[1:]
+                                    else:
+                                        c_phone = raw_phone
+                                    
+                                    # Encode the message properly
+                                    safe_msg = urllib.parse.quote(msg)
+                                    wa_link = f"https://wa.me/{c_phone}?text={safe_msg}"
+                                    
+                                    st.link_button(f"Win Back {row['cust_name']}", wa_link, use_container_width=True)
                             else:
                                 st.write("All customers have visited recently.")
                 else:
