@@ -1,22 +1,27 @@
-# Washh Laundry OS
-> **The Intelligent Operating System for Modern Dry Cleaning Businesses.**
+#Washh Laundry OS
+A Business Operating System (BOS) for digitizing and automating high-volume laundry enterprises.
 
-## Executive Summary
-Washh is a proprietary Business Operating System (BOS) designed to digitize and automate the end-to-end workflow 
-of dry cleaning and laundry enterprises. 
-Unlike generic POS systems, Washh acts as a **Business Assistant**, integrating logistics, 
-customer lifecycle management, and financial oversight into a single automated pipeline.
+Business Impact
+Washh was engineered to solve the "Paper Ledger Trap" in African SMEs. By migrating manual workflows into a structured PostgreSQL environment, the system provides 100% operational visibility and reduces "Garment Leakage" (loss/theft) by implementing a strict digital chain of custody.
 
-## Core Modules
-* **Logistics Engine:** Real-time tracking of garment movement from pickup to "Ready for Collection."
-* **Customer Intelligence:** Automated notification system and loyalty tracking based on "Swiping" frequency.
-* **Operational Analytics:** Daily revenue snapshots, garment aging reports, and staff productivity tracking.
-* **Financial Integrity:** Integrated ledger to prevent leakage and track high-value service orders.
+Technical Architecture & Features
+State-Machine Logistics: A custom Python-driven engine that tracks garment status transitions (Received → Sorting → Processing → Quality Check → Ready).
 
-## Technical Stack
-* **Backend:** Python (Business Logic & Automation)
-* **Architecture:** Modular Service-Oriented Design
-* **Data Layer:** Optimized for local and cloud-based synchronization
+Data Integrity & Migration: Successfully architected the migration from SQLite to PostgreSQL, implementing relational constraints to ensure 100% transaction accuracy.
+
+Retention Logic (ML-Ready): Built a deterministic Churn-Prediction Engine based on 21-day customer recency logic to trigger automated re-engagement.
+
+Asynchronous Notifications: Integrated messaging triggers for real-time customer updates upon status changes, improving CX and reducing manual inquiry overhead.
+
+Technical Stack
+Language: Python (Django for Core Logic)
+
+Database: PostgreSQL (Relational Mapping & Complex Queries)
+
+Frontend/UI: Streamlit (Internal Analytics Dashboard)
+
+DevOps: Git for Version Control; Docker (Containerization for local/cloud deployment)
+
 
 ## Intellectual Property Notice
 **Copyright © 2026 Emmanuel Okon.**
