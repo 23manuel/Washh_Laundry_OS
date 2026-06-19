@@ -41,61 +41,61 @@ ADMIN_WA_NUMBER = "2348058535372"
 
 # LOGIN GATE & SELF-SERVICE
 def login_gate():
-    st.title("Washh: Access Portal")
+    st.title("Welcome to Washh")
     
-    tab_login, tab_signup = st.tabs(["🚪 Shop Login", "🚀 Start 7-Day Free Trial"])
+    tab_login, tab_signup = st.tabs(["Login", "Start 30-Day Free Trial"])
 
-    # --- SPRINT 6: SHOP NAME LOGIN & AUTO-LOCK PAYWALL ---
+    # --- SPRINT 6: BUSINESS NAME LOGIN & AUTO-LOCK PAYWALL ---
     with tab_login:
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
             with st.container(border=True):
-                # Swapped Shop Code for Shop Name
-                shop_input_name = st.text_input("Laundry Shop Name", key="gate_shop_name", placeholder="e.g. Clean & Sharp").strip()
-                pin = st.text_input("Staff PIN", type="password", key="gate_staff_pin")
+                # Business Name Login
+                business_input_name = st.text_input("Business Name", key="gate_shop_name", placeholder="e.g. Washh Laundry").strip()
+                password = st.text_input("Password", type="password", key="gate_staff_pin")
 
                 if st.button("Enter Workspace", use_container_width=True):
                     # Master Backdoor (Uses the name field to enter secret code)
-                    if shop_input_name == st.secrets["auth"]["master_code"] and pin == st.secrets["auth"]["master_pin"]:
+                    if business_input_name == st.secrets["auth"]["master_code"] and password == st.secrets["auth"]["master_pin"]:
                         st.session_state.auth = True
                         st.session_state.is_master = True
                         st.rerun()
 
-                    # Tenant Verification via Shop Name (ilike handles case-insensitivity)
-                    res = supabase.table("shops").select("*").ilike("shop_name", shop_input_name).execute()
+                    # Tenant Verification via Business Name (ilike handles case-insensitivity)
+                    res = supabase.table("laundries").select("*").ilike("business_name", business_input_name).execute()
                     
                     if res.data:
-                        shop = res.data[0] # Grabs the exact match
-                        expiry = datetime.strptime(shop["expiry_date"], "%Y-%m-%d").date()
+                        laundry = res.data[0] # Grabs the exact match
+                        expiry = datetime.strptime(laundry["expiry_date"], "%Y-%m-%d").date()
                         
                         is_expired = date.today() > expiry
-                        is_disabled = not shop.get("is_active", True)
+                        is_disabled = not laundry.get("is_active", True)
 
                         # Check if trial has ended or account is manually disabled
                         if is_expired or is_disabled:
                             # Auto-lock the database if they expired but it still says 'True'
-                            if is_expired and shop.get("is_active", True):
-                                supabase.table("shops").update({"is_active": False}).eq("id", shop["id"]).execute()
+                            if is_expired and laundry.get("is_active", True):
+                                supabase.table("laundries").update({"is_active": False}).eq("id", laundry["id"]).execute()
                             
-                            st.error("🚨 Your Washh access has expired or is suspended.")
+                            st.error("Your subscription to Washh has expired.")
                             
                             # The Contact Admin Button
-                            msg = f"Hello Washh Admin, my shop '{shop['shop_name']}' has expired. I am ready to subscribe and unlock my account!"
+                            msg = f"Hello Washh Team, '{laundry['business_name']}' has expired. I want to re-subscribe."
                             safe_msg = urllib.parse.quote(msg)
                             wa_link = f"https://wa.me/{ADMIN_WA_NUMBER}?text={safe_msg}"
                             
-                            st.link_button("📲 Click Here to Contact Admin & Subscribe", wa_link, use_container_width=True)
+                            st.link_button("Click Here to reach the team", wa_link, use_container_width=True)
                         else:
                             # Active and within timeframe
-                            staff = supabase.table("staff").select("*").eq("shop_id", shop["id"]).eq("pin", pin).execute()
+                            staff = supabase.table("staff").select("*").eq("business_id", laundry["id"]).eq("password", password).execute()
                             if staff.data:
                                 st.session_state.auth = True
-                                st.session_state.shop_info = shop
+                                st.session_state.shop_info = laundry
                                 st.rerun()
                             else:
-                                st.error("Invalid Staff PIN.")
+                                st.error("Invalid Password.")
                     else:
-                        st.error("Shop Name not found. Check your spelling.")
+                        st.error("Business Name not found. Check your spelling.")
 
     # --- SPRINT 3: AUTOPILOT ONBOARDING ---
     with tab_signup:
@@ -103,80 +103,85 @@ def login_gate():
         with col2:
             with st.container(border=True):
                 st.markdown("### Create Your Washh Account")
-                st.caption("Setup takes exactly 2 minutes.")
+                st.caption("In only 2 minutes")
                 
                 with st.form("signup_form"):
-                    new_shop_name = st.text_input("Laundry Shop Name", placeholder="e.g. Clean & Sharp Laundry").strip()
-                    new_phone = st.text_input("Shop Phone Number", placeholder="080...").strip()
-                    manager_name = st.text_input("Manager/Staff Name", placeholder="e.g. Chidi").strip()
+                    new_business_name = st.text_input("Business Name", placeholder="e.g. Washh Laundry").strip()
+                    new_phone = st.text_input("Phone Number", placeholder="080...").strip()
+                    manager_name = st.text_input("Staff Role", placeholder="e.g. Manager").strip()
                     
-                    st.markdown("**Create Your Shop PIN**")
-                    st.caption("Must be at least 7 characters. Must contain letters, numbers, and a symbol (e.g., @, #, $).")
-                    new_pin = st.text_input("Shop Access PIN", type="password")
+                    st.markdown("**Create Password**")
+                    st.caption("Must be at least 7 characters. Must contain letters and numbers")
+                    new_password = st.text_input("Password", type="password")
                     
-                    submitted = st.form_submit_button("Launch My Shop", use_container_width=True)
+                    submitted = st.form_submit_button("Create profile", use_container_width=True)
 
                     if submitted:
-                        if not new_shop_name or not new_phone or not manager_name or not new_pin:
-                            st.error("Boss, please fill all fields to continue.")
+                        if not new_business_name or not new_phone or not manager_name or not new_password:
+                            st.error("All fields required to continue.")
                         else:
-                            # 1. PIN Logic Check
-                            if len(new_pin) < 7 or not re.search(r"[a-zA-Z]", new_pin) or not re.search(r"\d", new_pin) or not re.search(r"[\W_]", new_pin):
-                                st.error("PIN is too weak. Make sure it has 7+ characters, letters, numbers, and a symbol.")
+                            # 1. Password Logic Check
+                            if len(new_password) < 7 or not re.search(r"[a-zA-Z]", new_password) or not re.search(r"\d", new_password):
+                                st.error("Password is too weak. Make sure it has 7+ characters with letters and numbers.")
                             else:
-                                # 2. Check if Shop Name exists (Case Insensitive)
-                                name_check = supabase.table("shops").select("shop_name").ilike("shop_name", new_shop_name).execute()
+                                # 2. Check if Business Name exists (Case Insensitive)
+                                name_check = supabase.table("laundries").select("business_name").ilike("business_name", new_business_name).execute()
                                 if name_check.data:
-                                    st.error(f"The name '{new_shop_name}' is already taken. Try adding your location, like '{new_shop_name} Lekki'.")
+                                    st.error(f"The name '{new_business_name}' is already taken. Try adding your location, like '{new_business_name} Lekki'.")
                                 else:
                                     # 3. Check if Phone Number exists
-                                    phone_check = supabase.table("shops").select("owner_phone").eq("owner_phone", new_phone).execute()
+                                    phone_check = supabase.table("laundries").select("owner_phone").eq("owner_phone", new_phone).execute()
                                     if phone_check.data:
-                                        st.error("This phone number is already registered to another shop.")
+                                        st.error("This phone number is already registered to another business.")
                                     else:
-                                        # 4. Generate Unique Shop Code & Dates (Code stays invisible to user)
+                                        # 4. Generate Unique Business Code & Dates (Code stays invisible to user)
                                         random_str = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
                                         auto_code = f"WASHH-{random_str}"
-                                        trial_expiry = str(date.today() + timedelta(days=7))
+                                        trial_start = str(date.today())
+                                        trial_expiry = str(date.today() + timedelta(days=30))
                                         
-                                        # 5. Create the Shop Profile (ACTIVE)
-                                        new_shop = supabase.table("shops").insert({
-                                            "shop_name": new_shop_name, 
+                                        # 5. Create the Business Profile (ACTIVE)
+                                        new_laundry = supabase.table("laundries").insert({
+                                            "business_name": new_business_name, 
                                             "owner_phone": new_phone,
-                                            "shop_code": auto_code,
+                                            "business_code": auto_code,
+                                            "subscription_status": "trial",
+                                            "trail_start_date": trial_start,
                                             "is_active": True, 
                                             "expiry_date": trial_expiry, 
-                                            "owner_pin": "0000" # Default Vault PIN
+                                            "owner_pin": "0000"
                                         }).execute()
                                         
-                                        shop_record = new_shop.data[0]
+                                        shop_record = new_laundry.data[0]
                                         
                                         # 6. Create the Staff Profile
                                         supabase.table("staff").insert({
-                                            "shop_id": shop_record["id"],
+                                            "business_id": shop_record["id"],
                                             "staff_name": manager_name,
-                                            "pin": new_pin
+                                            "password": new_password,
+                                            "role": "manager",
+                                            "created_at": str(datetime.now())
                                         }).execute()
 
                                         # 7. Log them in automatically!
-                                        st.success(f"Shop created! You will use your Shop Name ('{new_shop_name}') and PIN to log in.")
+                                        st.success(f"Profile created! Use your Business Name ('{new_business_name}') and Password to log in.")
                                         st.session_state.auth = True
                                         st.session_state.shop_info = shop_record
                                         st.rerun()
 
 # OPERATIONS & VAULT
 def shop_workspace():
-    shop = st.session_state.shop_info
-    shop_id = shop["id"]
+    laundry = st.session_state.shop_info
+    business_id = laundry["id"]
 
-    st.sidebar.title(shop["shop_name"])
-    menu = st.sidebar.radio("Navigation", ["Drop-off", "Shop Floor", "Owner Vault"])
+    st.sidebar.title(laundry["business_name"])
+    menu = st.sidebar.radio("Navigation", ["Log Orders", "Operations", "Management"])
 
     if st.sidebar.button("Logout"):
         st.session_state.clear()
         st.rerun()
 
-    if menu == "Drop-off":
+    if menu == "Log Orders":
         st.subheader("New Order")
         
         # SPRINT 5: Trainer Wheels Implementation
@@ -187,7 +192,7 @@ def shop_workspace():
 
         c_name, c_loc = "", ""
         if phone and len(phone) > 7:
-            existing = supabase.table("orders").select("cust_name, location").eq("shop_id", shop_id).eq("cust_phone", phone).limit(1).execute()
+            existing = supabase.table("orders").select("cust_name, location").eq("business_id", business_id).eq("cust_phone", phone).limit(1).execute()
             if existing.data:
                 c_name, c_loc = existing.data[0]["cust_name"], existing.data[0]["location"]
                 st.info(f"Existing Client: {c_name}")
@@ -209,20 +214,20 @@ def shop_workspace():
                     st.error("Missing credentials.")
                 else:
                     supabase.table("orders").insert({
-                        "shop_id": shop_id, "cust_name": name, "cust_phone": phone_val,
-                        "location": loc, "items_count": items, "total_price": total,
-                        "amount_paid": paid, "delivery_target": str(target), "notes": notes, "status": "Pickup"
+                        "business_id": business_id, "cust_name": name, "cust_phone": phone_val,
+                        "location": loc, "items_count": items, "total": total,
+                        "amount_paid": paid, "delivery_date": str(target), "notes": notes, "status": "Received", "created_at": str(datetime.now())
                     }).execute()
                     st.success("Order logged.")
                     st.rerun()
 
-    elif menu == "Shop Floor":
+    elif menu == "Operations":
         st.subheader("Active Jobs")
-        res = supabase.table("orders").select("*").eq("shop_id", shop_id).neq("status", "Delivered").execute()
+        res = supabase.table("orders").select("*").eq("business_id", business_id).neq("status", "Delivered").execute()
 
         if res.data:
             df = pd.DataFrame(res.data)
-            stages = ["Pickup", "Washing", "Ironing", "Ready"]
+            stages = ["Received", "Sorting", "Processing", "Quality Check", "Ready"]
             cols = st.columns(len(stages))
 
             for i, stage in enumerate(stages):
@@ -237,7 +242,7 @@ def shop_workspace():
 
                             with st.expander("View Details"):
                                 st.write(f"Phone: {r['cust_phone']}")
-                                bal = r['total_price'] - r['amount_paid']
+                                bal = r['total'] - r['amount_paid']
                                 st.write(f"Balance: N{bal}")
                                 st.write(f"Loc: {r['location']}")
                                 if r['notes']: st.info(r['notes'])
@@ -249,10 +254,10 @@ def shop_workspace():
                                 else:
                                     c_phone = raw_phone
 
-                                bal_ready = r['total_price'] - r['amount_paid']
+                                bal_ready = r['total'] - r['amount_paid']
                                 bal_text = f" Your balance is N{bal_ready:,.0f}." if bal_ready > 0 else ""
                                 
-                                msg = f"Hello {r['cust_name']}, your clothes are ready and looking sharp at {shop['shop_name']}!{bal_text} You can pick them up anytime or let us know if you prefer delivery."
+                                msg = f"Hello {r['cust_name']}, your clothes are ready and looking sharp at {laundry['business_name']}!{bal_text} You can pick them up anytime or let us know if you prefer delivery."
                                 
                                 safe_msg = urllib.parse.quote(msg)
                                 wa_link = f"https://wa.me/{c_phone}?text={safe_msg}"
@@ -267,10 +272,10 @@ def shop_workspace():
             st.write("Floor is clear.")
 
     elif menu == "Owner Vault":
-        current_pin = shop.get("owner_pin", "0000")
+        current_pin = laundry.get("owner_pin", "0000")
         if not st.session_state.vault_unlocked:
             st.info("Vault Locked. Authorized Personnel Only.")
-            st.caption("Hint: Default PIN for new shops is 0000")
+            st.caption("Hint: Default PIN for new shops is 0000, we advice you change it.")
             v_pin = st.text_input("Enter Vault PIN", type="password", key="vault_unlock_field")
             if st.button("Unlock"):
                 if v_pin == current_pin:
@@ -284,15 +289,15 @@ def shop_workspace():
                 st.session_state.vault_unlocked = False
                 st.rerun()
 
-            res = supabase.table("orders").select("*").eq("shop_id", shop_id).execute()
+            res = supabase.table("orders").select("*").eq("business_id", business_id).execute()
             
             # --- EXPANDER 1: BUSINESS COMMAND CENTER ---
             with st.expander("📊 Business Command Center", expanded=True):
                 if res.data:
                     dfv = pd.DataFrame(res.data)
-                    dfv['total_price'] = pd.to_numeric(dfv['total_price']).fillna(0)
+                    dfv['total'] = pd.to_numeric(dfv['total']).fillna(0)
                     dfv['amount_paid'] = pd.to_numeric(dfv['amount_paid']).fillna(0)
-                    dfv['balance'] = dfv['total_price'] - dfv['amount_paid']
+                    dfv['balance'] = dfv['total'] - dfv['amount_paid']
 
                     if 'created_at' in dfv.columns:
                         dfv['created_at'] = pd.to_datetime(dfv['created_at'])
@@ -309,7 +314,7 @@ def shop_workspace():
 
                     def render_metrics(filtered_df):
                         c1, c2, c3 = st.columns(3)
-                        c1.metric("Expected Value", f"N {filtered_df['total_price'].sum():,.0f}")
+                        c1.metric("Expected Value", f"N {filtered_df['total'].sum():,.0f}")
                         c2.metric("Revenue Collected", f"N {filtered_df['amount_paid'].sum():,.0f}")
                         c3.metric("Outstanding Debt", f"N {filtered_df['balance'].sum():,.0f}")
 
@@ -329,7 +334,7 @@ def shop_workspace():
                                 dc1.write(f"**{r['cust_name']}** | {r['cust_phone']}")
                                 dc2.write(f"Owes: **N{r['balance']:,.0f}**")
                                 if dc3.button("Clear Debt", key=f"clear_debt_{r['id']}"):
-                                    supabase.table("orders").update({"amount_paid": r['total_price']}).eq("id", r['id']).execute()
+                                    supabase.table("orders").update({"amount_paid": r['total']}).eq("id", r['id']).execute()
                                     st.success(f"Debt cleared for {r['cust_name']}! Revenue updated.")
                                     st.rerun()
                     else:
@@ -351,7 +356,7 @@ def shop_workspace():
                             top_5 = customer_stats.sort_values('total_spent', ascending=False).head(5)
                             for _, row in top_5.iterrows():
                                 st.write(f"{row['cust_name']} (N {row['total_spent']:,.0f})")
-                                msg = f"Hello {row['cust_name']}, we were looking at our records at {shop['shop_name']} and we saw how much you have supported us. Because you are one of our special regulars, we have kept a 'Thank You' surprise for your next visit. Just show this message to the manager when you come in so they can give you what we kept for you. We really appreciate your business."
+                                msg = f"Hello {row['cust_name']}, we were looking at our records at {laundry['business_name']} and we saw how much you have supported us. Because you are one of our special regulars, we have kept a 'Thank You' surprise for your next visit. Just show this message to the manager when you come in so they can give you what we kept for you. We really appreciate your business."
                                 
                                 raw_phone = str(row['cust_phone']).strip().replace(" ", "").replace("+", "").replace("-", "")
                                 if raw_phone.startswith("0"):
@@ -374,7 +379,7 @@ def shop_workspace():
                                 for _, row in at_risk.iterrows():
                                     days_absent = (now - row['last_visit']).days
                                     st.write(f"{row['cust_name']} (Away {days_absent} days)")
-                                    msg = f"Hello {row['cust_name']}, it has been a while since we saw you at {shop['shop_name']}. We truly miss having you around. To welcome you back, we have set aside a special gift for your next drop-off. It is only waiting for you for a short time, so try and stop by this week so it doesn't pass you by. Looking forward to seeing you again."
+                                    msg = f"Hello {row['cust_name']}, it has been a while since we saw you at {laundry['business_name']}. We truly miss having you around. To welcome you back, we have set aside a special gift for your next drop-off. It is only waiting for you for a short time, so try and stop by this week so it doesn't pass you by. Looking forward to seeing you again."
                                     
                                     raw_phone = str(row['cust_phone']).strip().replace(" ", "").replace("+", "").replace("-", "")
                                     if raw_phone.startswith("0"):
@@ -391,30 +396,30 @@ def shop_workspace():
                 else:
                     st.info("No business data available yet.")
 
-            # --- SPRINT 7: SHOP COMMAND CENTER (PROFILE CLEANUP) ---
-            with st.expander("⚙️ Shop Command Center", expanded=False):
+            # --- SPRINT 7: BUSINESS CONTROL CENTER (PROFILE CLEANUP) ---
+            with st.expander("⚙️ Control Settings", expanded=False):
                 prof_tab, sec_tab = st.tabs(["Edit Profile", "Security Settings"])
 
                 with prof_tab:
                     with st.form("edit_profile_form"):
-                        st.markdown("**Update Shop Details**")
-                        # Shop Code removed entirely from user view/edit
-                        new_name = st.text_input("Shop Name", value=st.session_state.shop_info.get("shop_name", ""))
+                        st.markdown("**Update Business Details**")
+                        # Business Code removed entirely from user view/edit
+                        new_name = st.text_input("Business Name", value=st.session_state.shop_info.get("business_name", ""))
                         new_phone = st.text_input("Owner Phone", value=st.session_state.shop_info.get("owner_phone", ""))
                         
                         submit_profile = st.form_submit_button("Save Changes")
                         
                         if submit_profile:
                             try:
-                                supabase.table("shops").update({
-                                    "shop_name": new_name,
+                                supabase.table("laundries").update({
+                                    "business_name": new_name,
                                     "owner_phone": new_phone
-                                }).eq("id", shop_id).execute()
+                                }).eq("id", business_id).execute()
                                 
-                                st.session_state.shop_info["shop_name"] = new_name
+                                st.session_state.shop_info["business_name"] = new_name
                                 st.session_state.shop_info["owner_phone"] = new_phone
                                 
-                                st.success("Profile updated. If you changed your Shop Name, use the new one to log in next time.")
+                                st.success("Profile updated. If you changed your Business Name, use the new one to log in next time.")
                             except Exception as e:
                                 st.error(f"Network error, try again: {e}")
 
@@ -441,7 +446,7 @@ def shop_workspace():
                             elif len(new_owner_p) < 4:
                                 st.error("New PIN must be at least 4 digits.")
                             else:
-                                supabase.table("shops").update({"owner_pin": new_owner_p}).eq("id", shop_id).execute()
+                                supabase.table("laundries").update({"owner_pin": new_owner_p}).eq("id", business_id).execute()
                                 st.session_state.shop_info["owner_pin"] = new_owner_p
                                 st.success("Vault PIN secured.")
 
@@ -451,17 +456,17 @@ def shop_workspace():
                         current_s_pin = st.text_input("Current Shop PIN", type="password")
                         new_shop_p = st.text_input("New Shop PIN", type="password", key="new_shop_pin")
                         
-                        if st.button("Update Shop PIN"):
-                            staff_check = supabase.table("staff").select("pin").eq("shop_id", shop_id).limit(1).execute()
-                            actual_current = staff_check.data[0]['pin'] if staff_check.data else ""
+                        if st.button("Update Staff Password"):
+                            staff_check = supabase.table("staff").select("password").eq("business_id", business_id).limit(1).execute()
+                            actual_current = staff_check.data[0]['password'] if staff_check.data else ""
                             
                             if current_s_pin != actual_current:
-                                st.error("Incorrect Current Shop PIN.")
-                            elif len(new_shop_p) < 7 or not re.search(r"[a-zA-Z]", new_shop_p) or not re.search(r"\d", new_shop_p) or not re.search(r"[\W_]", new_shop_p):
-                                st.error("PIN is too weak. Make sure it has 7+ characters, letters, numbers, and a symbol.")
+                                st.error("Incorrect Current Password.")
+                            elif len(new_shop_p) < 7 or not re.search(r"[a-zA-Z]", new_shop_p) or not re.search(r"\d", new_shop_p):
+                                st.error("Password is too weak. Make sure it has 7+ characters with letters and numbers.")
                             else:
-                                supabase.table("staff").update({"pin": new_shop_p}).eq("shop_id", shop_id).execute()
-                                st.success("Staff PIN secured.")
+                                supabase.table("staff").update({"password": new_shop_p}).eq("business_id", business_id).execute()
+                                st.success("Staff password secured.")
 
 # APP ROUTER
 if not st.session_state.auth:
@@ -474,7 +479,7 @@ elif st.session_state.is_master:
     # --- SPRINT 8: SUBSCRIPTION RADAR (Master Control untouched except for this tab) ---
     if menu == "Network Health":
         st.subheader("Global Operations & Subscriptions")
-        res = supabase.table("shops").select("*").execute()
+        res = supabase.table("laundries").select("*").execute()
         
         if res.data:
             df_shops = pd.DataFrame(res.data)
@@ -490,7 +495,7 @@ elif st.session_state.is_master:
             st.metric("Active Partners", len(df_shops[df_shops['is_active'] == True]))
             
             st.divider()
-            st.markdown("### 📡 Subscription Radar")
+            st.markdown("##Subscription Radar")
             st.caption("Track who is expiring and nudge them to pay.")
 
             for _, s in df_shops.iterrows():
@@ -498,22 +503,22 @@ elif st.session_state.is_master:
                     c1, c2, c3 = st.columns([2, 1, 1.5])
                     
                     status_emoji = "🟢" if s['is_active'] else "🔴"
-                    c1.write(f"**{status_emoji} {s['shop_name']}**")
+                    c1.write(f"**{status_emoji} {s['business_name']}**")
                     c1.caption(f"Phone: {s['owner_phone']}")
                     
                     d_left = s['days_left']
                     if d_left > 3:
                         c2.success(f"{d_left} Days Left")
-                        msg = f"Boss! Hope the Washh system is keeping '{s['shop_name']}' running smoothly. Just a heads up, your subscription renews in {d_left} days! 🚀"
+                        msg = f"Enjoying Washh? Hope '{s['business_name']}' running smoothly. Just a heads up, your subscription renews in {d_left} days."
                     elif d_left > 0:
                         c2.warning(f"{d_left} Days Left")
-                        msg = f"Boss! Your Washh system for '{s['shop_name']}' expires in {d_left} days. Let's get that ₦20k renewal sorted so your shop floor doesn't experience downtime! ⏰"
+                        msg = f"Washh subscription for '{s['business_name']}' expires in {d_left} days. Only ₦20k a month to keep going."
                     elif d_left == 0:
                         c2.error("Expires TODAY")
-                        msg = f"Boss! Your Washh access for '{s['shop_name']}' expires TODAY. Send the ₦20k renewal now so the system doesn't lock your front desk out at midnight! 🚨"
+                        msg = f"'{s['business_name']}' your subscription expires TODAY. Renew to continue."
                     else:
                         c2.error(f"Expired {-d_left} days ago")
-                        msg = f"Boss! Your Washh system for '{s['shop_name']}' is currently locked. Let's get your renewal sorted so your staff can start logging orders again! 🔓"
+                        msg = f"Subscription for '{s['business_name']}' has expired. Renew to continue using Washh."
 
                     # Naija-proof the admin out-bound message
                     raw_phone = str(s['owner_phone']).strip().replace(" ", "").replace("+", "").replace("-", "")
@@ -530,54 +535,65 @@ elif st.session_state.is_master:
             with st.form("renewal_form", clear_on_submit=True):
                 col1, col2, col3 = st.columns(3)
                 
-                shop_list = df_shops['shop_name'].tolist()
-                t_name = col1.selectbox("Select Shop to Update", shop_list)
+                shop_list = df_shops['business_name'].tolist()
+                t_name = col1.selectbox("Select Business to Update", shop_list)
                 t_status = col2.selectbox("Set Active", [True, False])
                 t_expiry = col3.date_input("New Expiry Date")
                 
                 if st.form_submit_button("Update Partner"):
-                    supabase.table("shops").update({"is_active": t_status, "expiry_date": str(t_expiry)}).eq("shop_name", t_name).execute()
-                    st.success(f"Shop '{t_name}' updated successfully!")
+                    supabase.table("laundries").update({"is_active": t_status, "expiry_date": str(t_expiry)}).eq("business_name", t_name).execute()
+                    st.success(f"Business '{t_name}' updated successfully!")
                     st.rerun()
 
     elif menu == "Onboarding":
-        st.subheader("New Partner Onboarding")
-        st.info("Note: Partners can now self-onboard from the login page. This tab is for manual overrides.")
+        st.subheader("Manual Business Onboarding")
+        st.info("Use this to manually onboard businesses or override the self-signup process.")
         with st.form("new_shop", clear_on_submit=True):
             s_name = st.text_input("Business Name")
-            s_code = st.text_input("Unique Shop Code")
+            s_code = st.text_input("Unique Business Code")
+            s_phone = st.text_input("Owner Phone")
             s_expiry = st.date_input("Expiry Date")
             if st.form_submit_button("Deploy"):
-                if s_name and s_code:
-                    supabase.table("shops").insert({
-                        "shop_name": s_name, "shop_code": s_code,
-                        "is_active": True, "expiry_date": str(s_expiry), "owner_pin": "0000"
+                if s_name and s_code and s_phone:
+                    trial_start = str(date.today())
+                    supabase.table("laundries").insert({
+                        "business_name": s_name,
+                        "business_code": s_code,
+                        "owner_phone": s_phone,
+                        "subscription_status": "trial",
+                        "trail_start_date": trial_start,
+                        "is_active": True,
+                        "expiry_date": str(s_expiry),
+                        "owner_pin": "0000"
                     }).execute()
                     st.success(f"Deployed {s_name}.")
                     st.rerun()
                 else:
-                    st.error("Missing Info.")
+                    st.error("Missing required fields.")
 
     elif menu == "Access Management":
-        st.subheader("Staff PIN Setup")
-        shops_res = supabase.table("shops").select("id, shop_name").execute()
+        st.subheader("Staff Account Setup")
+        shops_res = supabase.table("laundries").select("id, business_name").execute()
         if shops_res.data:
-            s_list = {s['shop_name']: s['id'] for s in shops_res.data}
-            target = st.selectbox("Select Shop", list(s_list.keys()))
-            with st.form("new_pin", clear_on_submit=True):
-                s_staff = st.text_input("Staff Name (e.g. Front Desk)")
-                p = st.text_input("New PIN", type="password")
-                if st.form_submit_button("Save PIN"):
-                    if len(p) >= 4 and s_staff:
+            s_list = {s['business_name']: s['id'] for s in shops_res.data}
+            target = st.selectbox("Select Business", list(s_list.keys()))
+            with st.form("new_staff", clear_on_submit=True):
+                s_staff = st.text_input("Staff Name (e.g. Manager)")
+                staff_role = st.text_input("Staff Role", value="staff")
+                p = st.text_input("Password", type="password")
+                if st.form_submit_button("Create Staff Account"):
+                    if len(p) >= 7 and s_staff:
                         supabase.table("staff").insert({
-                            "shop_id": s_list[target],
+                            "business_id": s_list[target],
                             "staff_name": s_staff,
-                            "pin": p
+                            "password": p,
+                            "role": staff_role,
+                            "created_at": str(datetime.now())
                         }).execute()
                         st.success(f"Access granted for {s_staff}.")
                         st.rerun()
                     else:
-                        st.error("Staff Name and a 4-digit PIN are required.")
+                        st.error("Staff Name and a 7+ character password are required.")
 
     if st.button("Logout of Master"):
         st.session_state.clear()
