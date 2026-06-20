@@ -271,7 +271,7 @@ def shop_workspace():
         else:
             st.write("Floor is clear.")
 
-    elif menu == "Owner Vault":
+    elif menu == "Management":
         current_pin = laundry.get("owner_pin", "0000")
         if not st.session_state.vault_unlocked:
             st.info("Vault Locked. Authorized Personnel Only.")
